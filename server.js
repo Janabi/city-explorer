@@ -1,61 +1,114 @@
 'use strict';
-
+//... application dependiences 
 require('dotenv').config();
 const express = require('express');
-const server = express();
-
 const cors = require('cors');
-
+const superagent = require('superagent')
+///.. application setup 
+const server = express();
 server.use(cors());
-
 const PORT = process.env.PORT || 3000;
+//.. Routes ! 
+server.get('/location', handlerLocation);
+server.get('/weather', handlerWeather);
+server.get('/trails', handlerHiking);
+server.use(errorHandler);
 
-server.get('/location', (request, response) => {
-    const locationData = require('./data/location.json');
-
-    let locationObj = new Location('Lynnwood', locationData);
-    response.send(locationObj);
-});
-
-server.get('/weather', (request, response) => {
-    const weatherData = require('./data/weather.json');
-
-    let weatherList = [];
-    weatherData.data.forEach(value => {
-        let desc = value.weather.description;
-        let date = value.valid_date;
-        let weatherObj = new Weather(desc, date);
-        weatherList.push(weatherObj);
-    })
-    response.send(weatherList);
-
-});
-
+//..https://city-explorer-backend.herokuapp.com/location?city=amman 
+function handlerLocation(request, response) {
+    // const locationData = require('./data/location.json');
+    let cityName = request.query.city;
+    let locationKey = process.env.GEOCODE_API_KEY;
+    let url = `https://eu1.locationiq.com/v1/search.php?key=${locationKey}&q=${cityName}&format=json`
+    superagent.get(url)
+        .then(data => {
+            // console.log(data.body)
+            let locationObj = new Location(cityName, data.body);
+            response.send(locationObj);
+        })
+        .catch(() => {
+            errorHandler('The Location Data is Not Found !', request, response)
+        })
+}
+//.. https://city-explorer-backend.herokuapp.com/weather?id=700&search_query=amman&formatted_query=Amman%2C%2011181%2C%20Jordan&latitude=31.951569&longitude=35.923963&created_at=&page=1
+function handlerWeather(request, response) {
+    // const weatherData = require('./data/weather.json');
+    let latitudeWeather = request.query.latitude;
+    let longitudeWeather = request.query.longitude;
+    let weatherKey = process.env.WEATHER_API_KEY;
+    let cityWeather = request.query.search_query;
+    let urlWeather = `https://api.weatherbit.io/v2.0/forecast/daily?city=${cityWeather}&key=${weatherKey}&days=5&lat=${latitudeWeather}&lon=${longitudeWeather}`;
+    superagent.get(urlWeather)
+        .then(wData => {
+            // console.log(wData.body.data);
+            let weatherList = wData.body.data.map(value => {
+                let desc = value.weather.description
+                let time = value.datetime
+                let weatherData = new Weather(desc, time);
+                return weatherData;
+            });
+            response.status(200).send(weatherList);
+            // console.log(data);
+        })
+        .catch(() => {
+            errorHandler('The Weather Data is Not Found !', request, response)
+        })
+};
+//..https://www.hikingproject.com/data/get-trails?lat=40.0274&lon=-105.2519&maxDistance=10&key=200980365-6f8c863
+function handlerHiking(request, response) {
+    let latTrail = request.query.latitude;
+    let lonTrail = request.query.longitude;
+    let keyTrail = process.env.TRIAL_API_KEY;
+    let urlTrail = `https://www.hikingproject.com/data/get-trails?lat=${latTrail}&lon=${lonTrail}&maxDistance=10&key=${keyTrail}`
+    superagent.get(urlTrail)
+        .then(data => {
+            console.log(data.body.trails)
+            let trailData = data.body.trails.map(value => {
+                let trailObj = new Trails(value)
+                return trailObj
+            })
+            response.status(200).send(trailData);
+        })
+        .catch(() => {
+            errorHandler('The Trails Data is Not Found !', request, response)
+        })
+}
+//.. https://city-explorer-backend.herokuapp.com/trails?id=700&search_query=amman&formatted_query=Amman%2C%2011181%2C%20Jordan&latitude=31.951569&longitude=35.923963&created_at=&page=1
+// constructer for location 
 function Location(city, locData) {
     this.search_query = city;
     this.formatted_query = locData[0].display_name;
     this.latitude = locData[0].lat;
     this.longitude = locData[0].lon;
 };
-
-
-function Weather(desc, date) {
+// constructer for weather 
+function Weather(desc, time, cityWeather) {
     this.forecast = desc;
-    this.time = date;
-
+    this.time = time;
+    this.search_query = cityWeather;
 };
-
+//.. constructer for Trails 
+function Trails(value) {
+    this.name = value.name;
+    this.location = value.location;
+    this.length = value.length;
+    this.stars = value.stars;
+    this.star_votes = value.starVotes;
+    this.summary = value.summary;
+    this.trail_url = value.url
+    this.conditions = value.conditionDetails
+    this.condition_date = value.conditionDate.slice(0, value.conditionDate.indexOf(' ') + 1);
+    this.condition_time = value.conditionDate.slice(value.conditionDate.indexOf(' ') + 1, value.conditionDate.length);
+}
 server.get('/', (req, res) => {
     res.status(200).send('hello hello');
-});
+})
 server.listen(PORT, () => {
     console.log('hi');
-});
-
+})
 server.get('*', (request, response) => {
     response.status(404).send('not found');
-});
-
-server.use((error, request, response) => {
+})
+function errorHandler(error, request, response) {
     response.status(500).send(error);
-});
+}
