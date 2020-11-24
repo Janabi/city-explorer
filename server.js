@@ -3,10 +3,12 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const superagent = require('superagent')
+const superagent = require('superagent');
+const pg = require('pg');
 ///.. application setup 
 const server = express();
 server.use(cors());
+const client = new pg.Client(process.env.DATABASE_URL);
 const PORT = process.env.PORT || 3000;
 //.. Routes ! 
 server.get('/location', handlerLocation);
@@ -20,16 +22,50 @@ function handlerLocation(request, response) {
     let cityName = request.query.city;
     let locationKey = process.env.GEOCODE_API_KEY;
     let url = `https://eu1.locationiq.com/v1/search.php?key=${locationKey}&q=${cityName}&format=json`
-    superagent.get(url)
-        .then(data => {
-            // console.log(data.body)
-            let locationObj = new Location(cityName, data.body);
-            response.send(locationObj);
-        })
-        .catch(() => {
-            errorHandler('The Location Data is Not Found !', request, response)
-        })
+    getLocation(cityName).then(data=> {
+        if (data.length === 0) {
+            superagent.get(url)
+            .then(data => {
+                // console.log(data.body)
+                let locationObj = new Location(cityName, data.body);
+                response.send(locationObj);
+                let safeValues = [
+                    locationObj.search_query,
+                    locationObj.formatted_query,
+                    locationObj.latitude,
+                    locationObj.longitude
+                ];
+                let SQL = `INSERT INTO locations VALUES ($1,$2,$3,$4);`;
+                client.query(SQL, safeValues)
+                .then(result =>{
+                    console.log("The data were added successfully!!");
+                })
+                .catch(error =>{
+                    response.send(errorHandler(error, request, response));
+                })
+            })
+            .catch(() => {
+                errorHandler('The Location Data is Not Found !', request, response)
+            })
+        } else {
+            response.status(200).send(data[0]);
+        }
+    });
+    
+     
 }
+
+function getLocation (city) {
+    let safeValue = [city];
+    let SQL = `SELECT * FROM locations WHERE search_query = $1`;
+    return client.query(SQL, safeValue)
+    .then(result=>{
+        return result.rows;
+    });
+}
+
+
+
 //.. https://city-explorer-backend.herokuapp.com/weather?id=700&search_query=amman&formatted_query=Amman%2C%2011181%2C%20Jordan&latitude=31.951569&longitude=35.923963&created_at=&page=1
 function handlerWeather(request, response) {
     // const weatherData = require('./data/weather.json');
@@ -103,9 +139,14 @@ function Trails(value) {
 server.get('/', (req, res) => {
     res.status(200).send('hello hello');
 })
-server.listen(PORT, () => {
-    console.log('hi');
-})
+
+client.connect()
+.then(()=>{
+    server.listen(PORT, () => {
+        console.log('hi');
+    });
+});
+
 server.get('*', (request, response) => {
     response.status(404).send('not found');
 })
