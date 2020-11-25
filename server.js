@@ -14,7 +14,21 @@ const PORT = process.env.PORT || 3000;
 server.get('/location', handlerLocation);
 server.get('/weather', handlerWeather);
 server.get('/trails', handlerHiking);
+server.get('/movies', movieHandler);
 server.use(errorHandler);
+
+//https://city-explorer-backend.herokuapp.com/movies?id=430&search_query=lynnwood&formatted_query=Lynnwood%2C%20WA%2C%20USA&latitude=47.820930&longitude=-122.315131&created_at=&page=1
+function movieHandler (request, response) {
+    let region = request.query.search_query;
+    let key = process.env.MOVIE_API_KEY;
+    let url = `https://api.themoviedb.org/3/movie/550?api_key=${key}&region=${region}`;
+
+    superagent.get(url)
+    .then(data=> {
+        let movieObj = new Movie(data.body);
+        response.status(200).json(movieObj);
+    });
+}
 
 //..https://city-explorer-backend.herokuapp.com/location?city=amman 
 function handlerLocation(request, response) {
@@ -135,6 +149,18 @@ function Trails(value) {
     this.conditions = value.conditionDetails
     this.condition_date = value.conditionDate.slice(0, value.conditionDate.indexOf(' ') + 1);
     this.condition_time = value.conditionDate.slice(value.conditionDate.indexOf(' ') + 1, value.conditionDate.length);
+}
+//.. constructor for Movie
+// https://image.tmdb.org/t/p/w500
+//https://api.themoviedb.org/3/movie/550?api_key=&region=Lynnwood
+function Movie(value) {
+    this.title = value.original_title;
+    this.overview = value.overview;
+    this.average_votes = value.vote_average;
+    this.total_votes = value.vote_count;
+    this.image_url = 'https://image.tmdb.org/t/p/w500' + value.poster_path;
+    this.popularity = value.popularity;
+    this.released_on = value.release_date;
 }
 server.get('/', (req, res) => {
     res.status(200).send('hello hello');
