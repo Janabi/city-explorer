@@ -34,6 +34,9 @@ function yelpHandler(request, response) {
         })
         response.send(yelpData);
     })
+    .catch(()=> {
+        errorHandler("yelp is not working", request, response);
+    });
 }
 
 //https://city-explorer-backend.herokuapp.com/movies?id=430&search_query=lynnwood&formatted_query=Lynnwood%2C%20WA%2C%20USA&latitude=47.820930&longitude=-122.315131&created_at=&page=1
@@ -48,7 +51,10 @@ function movieHandler (request, response) {
             return new Movie(movie);
         })
         response.status(200).json(movieArray);
-    });
+    })
+    .catch(() => {
+        errorHandler("the moviedb is not working", request, response);
+    })
 }
 
 //..https://city-explorer-backend.herokuapp.com/location?city=amman 
