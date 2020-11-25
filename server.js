@@ -15,18 +15,39 @@ server.get('/location', handlerLocation);
 server.get('/weather', handlerWeather);
 server.get('/trails', handlerHiking);
 server.get('/movies', movieHandler);
+server.get('/yelp', yelpHandler);
 server.use(errorHandler);
+
+// Request URL: http://localhost:3050/yelp?search_query=seattle&formatted_query=Seattle%2C%20King%20County%2C%20Washington%2C%20USA&latitude=47.6038321&longitude=-122.3300624&page=1
+function yelpHandler(request, response) {
+    let city = request.query.search_query;
+    let page = request.query.page;
+    let offset = ((page -1) * 5 + 1);
+    let key = process.env.YELP_API_KEY;
+    let url = `https://api.yelp.com/v3/businesses/search?location=${city}&limit=5&offset=${offset}`;
+
+    superagent.get(url)
+    .set({'Authorization': 'Bearer ' + key})
+    .then(data => {
+        let yelpData = data.body.businesses.map(value => {
+            return new Yelp(value);
+        })
+        response.send(yelpData);
+    })
+}
 
 //https://city-explorer-backend.herokuapp.com/movies?id=430&search_query=lynnwood&formatted_query=Lynnwood%2C%20WA%2C%20USA&latitude=47.820930&longitude=-122.315131&created_at=&page=1
 function movieHandler (request, response) {
     let region = request.query.search_query;
     let key = process.env.MOVIE_API_KEY;
-    let url = `https://api.themoviedb.org/3/movie/550?api_key=${key}&region=${region}`;
+    let url = `https://api.themoviedb.org/3/search/movie?api_key=${key}&query=${region}`;
 
     superagent.get(url)
     .then(data=> {
-        let movieObj = new Movie(data.body);
-        response.status(200).json(movieObj);
+        let movieArray = data.body.results.map(movie => {
+            return new Movie(movie);
+        })
+        response.status(200).json(movieArray);
     });
 }
 
@@ -161,6 +182,15 @@ function Movie(value) {
     this.image_url = 'https://image.tmdb.org/t/p/w500' + value.poster_path;
     this.popularity = value.popularity;
     this.released_on = value.release_date;
+}
+
+//.. constructor for Yelp
+function Yelp(value) {
+    this.name = value.name;
+    this.image_url = value.image_url;
+    this.price = value.price;
+    this.rating = value.rating;
+    this.url = value.url;
 }
 server.get('/', (req, res) => {
     res.status(200).send('hello hello');
